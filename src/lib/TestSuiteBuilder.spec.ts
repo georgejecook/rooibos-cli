@@ -3,6 +3,7 @@ import * as fs from 'fs-extra';
 
 import { expect } from 'chai';
 
+import { getFeedbackErrors, resetFeedback } from './Feedback';
 import { Tag } from './Tag';
 import { TestSuiteBuilder } from './TestSuiteBuilder';
 import { makeFile } from './TestUtils';
@@ -19,9 +20,9 @@ function clearFiles() {
   fs.removeSync(targetPath);
 }
 
-function copyFiles() {
+function copyFiles(alternatePath = null) {
   try {
-    fs.copySync(sourcePath, targetPath);
+    fs.copySync(alternatePath || sourcePath, targetPath);
   } catch (err) {
     console.error(err);
   }
@@ -258,6 +259,45 @@ describe('TestSuiteBuilder tests ', function() {
         expect(testSuite.setupFunctionName).to.equal('MainTestSuite__SetUp');
         expect(testSuite.tearDownFunctionName).to.equal('MainTestSuite__TearDown');
         expect(testSuite.itGroups[0].testCases.length).to.equal(7);
+      });
+
+    });
+
+    describe('duplicates', function() {
+      beforeEach(() => {
+        clearFiles();
+        copyFiles('src/test/stubProjectDuplicateTestCases');
+        resetFeedback();
+      });
+
+      it('errors on duplicate testCase name', () => {
+        let file = makeFile(specDir, `soloGroup.brs`);
+        file.getFileContents();
+        let testSuite = builder.processFile(file);
+        let errors = getFeedbackErrors();
+        expect(errors).to.not.be.empty;
+      });
+
+      it('errors on duplicate itGroup name', () => {
+        let file = makeFile(specDir, `soloSuite.brs`);
+        file.getFileContents();
+        let testSuite = builder.processFile(file);
+        let errors = getFeedbackErrors();
+        expect(errors).to.not.be.empty;
+      });
+      it('errors on duplicate suite name', () => {
+        builder = new TestSuiteBuilder(50, false);
+
+        let file = makeFile(specDir, `urlParams.brs`);
+        builder.processFile(file);
+        let errors = getFeedbackErrors();
+        expect(errors).to.be.empty;
+
+        file = makeFile(specDir, `urlParams.brs`);
+        builder.processFile(file);
+
+        errors = getFeedbackErrors();
+        expect(errors).to.not.be.empty;
       });
 
     });

@@ -1,6 +1,6 @@
 {
   "name": "rooibos-cli",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "cli for rooibos testing framework, for brightscript and scenegraph apps",
   "main": "dist/index.js",
   "typings": "dist/index.d.ts",

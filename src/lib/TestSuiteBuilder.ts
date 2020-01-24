@@ -1,5 +1,6 @@
 import * as Debug from 'debug';
 
+import { feedbackError } from './Feedback';
 import File from './File';
 import { ItGroup } from './ItGroup';
 import { Tag } from './Tag';
@@ -8,10 +9,6 @@ import { TestSuite } from './TestSuite';
 
 const debug = Debug('RooibosProcessor');
 const getJsonFromString = require('./getJsonFromString');
-
-interface INameCounts {
-  [filename: string]: number;
-}
 
 export class TestSuiteBuilder {
   constructor(maxLinesWithoutSuiteDirective: number, isLegacyTestsSupported: boolean) {
@@ -33,7 +30,6 @@ export class TestSuiteBuilder {
   private paramsInvalidToNullRegex: RegExp;
   private _maxLinesWithoutSuiteDirective: number;
   private _isLegacyTestsSupported: boolean;
-  private groupNameCounts: INameCounts;
   public currentGroup?: ItGroup;
   private functionEndRegex: RegExp;
   private functionNameRegex: RegExp;
@@ -46,6 +42,7 @@ export class TestSuiteBuilder {
   private testCaseOnlyParams: object[];
   private testCaseOnlyParamLines: number[];
   private currentTestCases: TestCase[];
+  private testSuiteNames = new Set<string>();
 
   public get errors(): string[] {
     return this._errors;
@@ -62,6 +59,7 @@ export class TestSuiteBuilder {
   public processFile(file: File): TestSuite {
     let code = file ? file.getFileContents() : null;
     let testSuite = new TestSuite();
+
     if (!code || !code.trim()) {
       debug(`no code for current descriptor`);
       this.errors.push('No code for file' + (file ? file.fullPath : `unknown file`));
@@ -83,15 +81,13 @@ export class TestSuiteBuilder {
     let nextName = '';
     let name = file.normalizedFileName;
     let filename = file.normalizedFileName;
-    this.reset();
     let currentLocation = '';
     let lines = code.split(/\r?\n/);
     let filePath = file.fullPath;
     testSuite.filePath = file.pkgPath;
-    this.groupNameCounts = {};
     this.currentGroup = null;
     this.reset();
-
+    let itGroupNames = new Set<string>();
     for (let lineNumber = 1; lineNumber <= lines.length; lineNumber++) {
       currentLocation = filePath + ':' + lineNumber.toString();
       let line = lines[lineNumber - 1];
@@ -109,7 +105,12 @@ export class TestSuiteBuilder {
         name = this.getTagText(line, Tag.TEST_SUITE);
 
         if (name) {
+          if (this.testSuiteNames.has(name)) {
+            feedbackError(file, `\nTest suite with name '${name}' has already been defined!`);
+          }
           testSuite.name = name;
+
+          this.testSuiteNames.add(name);
         }
 
         if (isNextTokenSolo) {
@@ -144,22 +145,13 @@ export class TestSuiteBuilder {
           name = `UNNAMED Tag.TEST GROUP - name this group for better readability - e.g. 'Tests the Load method... '`;
         }
 
-        if (!this.groupNameCounts[name]) {
-          this.groupNameCounts[name] = 0;
+        if (itGroupNames.has(name)) {
+          feedbackError(file, `\nIt group with name '${name}' has already been defined in this test suite`);
         }
-
-        let nameCount = this.groupNameCounts[name];
-        nameCount++;
-        this.groupNameCounts[name] = nameCount;
-        if (nameCount > 1) {
-          debug(`WARNING A Group already exists with the name '` + name + ` changing name to avoid collisions. New Name:`);
-          this.warnings.push(`WARNING A Group already exists with the name '` + name + ` changing name to avoid collisions. New Name:` + currentLocation);
-
-          name = `WARNING!! DUPLICATE_` + (nameCount - 1).toString().trim() + `: ` + name;
-        }
+        itGroupNames.add(name);
 
         this.currentGroup = new ItGroup(name, isNextTokenSolo, isNextTokenIgnore, filename);
-
+        this.currentGroup.file = file;
         // 'inherit all suite functions that were set up to no';
         this.currentGroup.setupFunctionName = testSuite.setupFunctionName;
         this.currentGroup.tearDownFunctionName = testSuite.tearDownFunctionName;
@@ -481,7 +473,6 @@ export class TestSuiteBuilder {
     let lines = code.split(/\r?\n/);
     let filePath = file.fullPath;
     testSuite.filePath = file.pkgPath;
-    this.groupNameCounts = {};
     this.currentGroup = null;
     this.reset();
     this.currentTestCases = [];
@@ -539,7 +530,7 @@ export class TestSuiteBuilder {
       } else if (line.match(functionEndRegex)) {
         if (isInInitFunction) {
           this.currentGroup = new ItGroup('LEGACY TESTS', false, false, file.normalizedFileName);
-
+          this.currentGroup.file = file;
           this.currentGroup.setupFunctionName = testSuite.setupFunctionName;
           this.currentGroup.isLegacy = true;
           testSuite.itGroups.push(this.currentGroup);

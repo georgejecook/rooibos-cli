@@ -11,6 +11,10 @@ export function feedbackMessage(type: FileFeedbackType, file: File | null, messa
   }
 }
 
+export function resetFeedback() {
+  _feedback.splice(0, _feedback.length);
+}
+
 export function feedbackInfo(file: File, message: string, isThrown: boolean = false) {
   feedbackMessage(FileFeedbackType.Info, file, message, isThrown);
 }

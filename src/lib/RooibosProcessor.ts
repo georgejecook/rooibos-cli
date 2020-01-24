@@ -1,4 +1,3 @@
-import * as Debug from 'debug';
 
 import * as path from 'path';
 
@@ -9,14 +8,13 @@ import FunctionMap from './FunctionMap';
 import { ProcessorConfig } from './ProcessorConfig';
 import { RuntimeConfig } from './RuntimeConfig';
 
-const debug = Debug('RooibosProcessor');
 const pkg = require('../../package.json');
 
 export class RooibosProcessor {
   constructor(config: ProcessorConfig) {
 
     this._config = config;
-    debug('Running project processor');
+    console.log('Running project processor');
 
     if (!config.projectPath) {
       throw new Error('Config does not contain projectPath property');
@@ -39,20 +37,20 @@ export class RooibosProcessor {
   }
 
   public processFiles() {
-    debug(`Running processor at path ${this.config.projectPath} `);
+    console.log(`Running processor at path ${this.config.projectPath} `);
 
     let outputText = this.createFileHeaderText();
     let functionMap = new FunctionMap();
 
-    debug(`Adding runtimeConfig `);
+    console.log(`Adding runtimeConfig `);
     this.runtimeConfig = new RuntimeConfig(functionMap, this.config);
     this.runtimeConfig.process();
 
-    debug(`Adding function map `);
+    console.log(`Adding function map `);
     outputText += '\n' + functionMap.getFunctionMapText();
-    debug(`Adding runtime config function `);
+    console.log(`Adding runtime config function `);
     outputText += '\n' + this.getRuntimeConfigText();
-    debug(`Adding version function `);
+    console.log(`Adding version function `);
     outputText += '\n' + this.getVersionText();
 
     outputText += '\n' + this.createTestsHeaderText();
@@ -62,30 +60,34 @@ export class RooibosProcessor {
     let mapFileName = path.join(this.config.projectPath, this.config.outputPath, 'rooibosFunctionMap.brs');
     const file = new File(path.resolve(path.dirname(mapFileName)), path.dirname(mapFileName), path.basename(mapFileName), '.brs');
     file.setFileContents(outputText);
-    debug(`Writing to ${file.fullPath}`);
+    console.log(`Writing to ${file.fullPath}`);
     file.saveFileContents();
 
     if (this.config.isRecordingCodeCoverage) {
-      debug(`this is a code coverage build. Adding code coverage calls`);
+      console.log(`this is a code coverage build. Adding code coverage calls`);
       let coverageProcessor = new CodeCoverageProcessor(this.config);
       coverageProcessor.process();
     } else {
-      debug(`this is NOT a code coverage build.`);
+      console.log(`this is NOT a code coverage build.`);
     }
     this.reportErrors();
     this.reportWarnings();
+
+    if (getFeedbackErrors().length > 0) {
+      throw new Error('rooibos-cli failed to parse tests due to reported errors');
+    }
   }
 
   public reportErrors() {
     if (getFeedbackErrors().length > 0) {
 
-      debug(`
+      console.log(`
     The following errors occurred during processing:
 
     ======
     `);
-      getFeedbackErrors().forEach((errorText) => debug(`[ERROR] ${errorText}`));
-      debug(`
+      getFeedbackErrors().forEach((errorText) => console.log(`[ERROR] ${errorText}`));
+      console.log(`
     ======
     `);
     }
@@ -94,13 +96,13 @@ export class RooibosProcessor {
   public reportWarnings() {
     if (getFeedbackWarnings().length > 0) {
 
-      debug(`
+      console.log(`
     The following warnings occurred during processing:
 
     ======
     `);
-      getFeedbackWarnings().forEach((errorText) => debug(`[WARN] ${errorText}`));
-      debug(`
+      getFeedbackWarnings().forEach((errorText) => console.log(`[WARN] ${errorText}`));
+      console.log(`
     ======
     `);
     }
@@ -139,7 +141,7 @@ export class RooibosProcessor {
           "failFast": ${this.config.failFast}
           "showOnlyFailures": ${this.config.showFailuresOnly}
           "rooibosPreprocessorVersion": ${pkg.version}
-          "port": ${this.config.port || "Invalid"}
+          "port": ${this.config.port || 'Invalid'}
           }
     end function
     `;
